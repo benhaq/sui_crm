@@ -6,7 +6,6 @@ public struct SalaryVaultCreated has copy, drop {
     vault_id: ID,
     month: u64,
     year: u64,
-    owner: address,
     initial_balance: u64,
     timestamp: u64,
 }
@@ -72,12 +71,11 @@ public fun emit_tokens_burned(treasury_cap_id: ID, amount_burned: u64) {
     });
 }
 
-public fun emit_salary_vault_created(vault_id: ID, month: u64, year: u64, owner: address, initial_balance: u64, timestamp: u64) {
+public fun emit_salary_vault_created(vault_id: ID, month: u64, year: u64, initial_balance: u64, timestamp: u64) {
     event::emit(SalaryVaultCreated {
         vault_id,
         month,
         year,
-        owner,
         initial_balance,
         timestamp,
     });

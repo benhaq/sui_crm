@@ -63,4 +63,9 @@ module company::payment_token {
     public fun value(coin: &Coin<PAYMENT_TOKEN>): u64 {
         coin::value(coin)
     }
+    
+    #[test_only]
+    public fun destroy_for_testing(coin: Coin<PAYMENT_TOKEN>) {
+        coin::burn_for_testing(coin);
+    }
 }
