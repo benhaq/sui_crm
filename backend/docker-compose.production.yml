@@ -1,0 +1,13 @@
+version: '3.8'
+services:
+  dessisstant:
+    restart: always
+    image: 12091999/dessisstant:${TAG}
+    env_file:
+      - .stack.env
+    networks:
+      - production
+networks:
+  production:
+    name: production
+    external: true

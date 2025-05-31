@@ -1,2 +1,10 @@
 build/*
 Move.lock
+
+backend/node_modules/*
+backend/dist/*
+backend/build/*
+backend/package-lock.json
+
+move/scripts/node_modules/*
+move/scripts/package-lock.json
