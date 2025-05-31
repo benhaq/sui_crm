@@ -21,6 +21,7 @@ const EInvalidProofData: u64 = 109;
 const EEmployeeNotCurrentlyEmployed: u64 = 110;
 const EInsufficientWorkingDays: u64 = 111;
 const EInvalidSignature: u64 = 112;
+const ENotWhitelistedForDailyAccess: u64 = 113;
 
 // Employee Log Logic Errors
 const EInvalidLog: u64 = 201;
@@ -47,3 +48,4 @@ public fun invalid_proof_data(): u64 { EInvalidProofData }
 public fun employee_not_currently_employed(): u64 { EEmployeeNotCurrentlyEmployed }
 public fun insufficient_working_days(): u64 { EInsufficientWorkingDays }
 public fun invalid_signature(): u64 { EInvalidSignature }
+public fun not_whitelisted_for_daily_access(): u64 { ENotWhitelistedForDailyAccess }

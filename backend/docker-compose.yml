@@ -1,9 +1,0 @@
-version: '3.8'
-services:
-  dessisstant:
-    restart: always
-    image: dessisstant:${TAG}
-    ports:
-      - 6003:6003
-    env_file:
-      - .env.local

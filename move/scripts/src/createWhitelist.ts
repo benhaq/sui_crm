@@ -4,10 +4,6 @@ import { packageId } from "./constant";
 import { getKeypairFromBech32Priv } from "./helpers";
 
 const client = new SuiClient({ url: getFullnodeUrl("testnet") });
-const userAddresses = [
-  "0xe321470ee46a76f1a33d5a76ecc0f076f35f1fd1e393acad502697f453108647",
-  "0x71e859d2b8396da542932f56228209ca2965aed2f470e6e4fb740804983f21af",
-];
 const PRIVATE_KEY =
   "suiprivkey1qqj9qawwshpgfgr53smn6swsyl9jfg2umr5ytfgavwdv690jcdvaz3k9ulu";
 
@@ -18,10 +14,7 @@ async function createWhitelist() {
 
     txb.moveCall({
       target: `${packageId}::whitelist::create_allowlist_entry`,
-      arguments: [
-        txb.pure.string("WorklogMay2025"),
-        txb.pure.vector("address", userAddresses),
-      ],
+      arguments: [txb.pure.string("WorklogMay2025")],
     });
     const result = await client.signAndExecuteTransaction({
       signer: keypair,
@@ -29,6 +22,7 @@ async function createWhitelist() {
       options: {
         showEffects: true,
         showEvents: true,
+        showObjectChanges: true,
       },
     });
     console.log("Transaction successful!");

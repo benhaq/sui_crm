@@ -2,35 +2,40 @@ import { Transaction } from "@mysten/sui/transactions";
 import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { SealClient, SessionKey, getAllowlistedKeyServers } from "@mysten/seal"; // Ensure @mysten/seal is installed
-import { fromHEX, toHEX } from "@mysten/bcs"; // For handling hex strings if needed for IDs
+import { fromHex, fromHEX, toHex, toHEX } from "@mysten/bcs"; // For handling hex strings if needed for IDs
 import { packageId, whitelistId } from "./constant";
+import { getKeypairFromBech32Priv } from "./helpers";
 
-// --- Configuration (MUST REPLACE with your actual values) ---
+// Replace with your employee's keypair (ensure it has SUI for gas)
+const EMPLOYEE_PRIVATE_KEY =
+  "suiprivkey1qpv5nc5pekayzkwwq722andx38cnnlft8th6clszxm9adtzhfmyh6t6ev0h";
+const employeeKeypair = getKeypairFromBech32Priv(EMPLOYEE_PRIVATE_KEY);
+const employeeAddress = employeeKeypair.getPublicKey().toSuiAddress();
+
+// --- Configuration ---
 const PACKAGE_ID = packageId; // Your main package ID where employee_log and whitelist are
 const MODULE_WHITELIST = "whitelist"; // Module where create_whitelist is
 const MODULE_EMPLOYEE_LOG = "employee_log"; // Module with seal_approve_daily_access, check_in/out
 const SUI_NODE_URL = getFullnodeUrl("testnet"); // Or 'devnet', 'mainnet'
 
-// Replace with your employee's keypair (ensure it has SUI for gas)
-const employeeMnemonic = "employee secret recovery phrase here";
-const employeeKeypair = Ed25519Keypair.deriveKeypair(employeeMnemonic);
-const employeeAddress = employeeKeypair.getPublicKey().toSuiAddress();
-
 // Mysten Labs Testnet Key Server Object IDs (replace if you use others or if these change)
 // You need to find the actual Object IDs for these on Testnet.
 // These are illustrative placeholders.
 const KEY_SERVER_OBJECT_IDS_TESTNET = getAllowlistedKeyServers("testnet");
-const ENCRYPTION_THRESHOLD = 2; // Example: 1-out-of-2 key servers needed
+const ENCRYPTION_THRESHOLD = 1; // Example: 1-out-of-2 key servers needed
 
 const CLOCK_OBJECT_ID = "0x6"; // Standard shared Clock object ID
 // --- End Configuration ---
 
 // Helper to create a daily ID for Seal policy
-function createDailyEmployeeId(employeeAddr: string): string {
+function createDailyEmployeeId(
+  employeeAddr: string,
+  policyObjectId: string
+): string {
+  const policyObjectBytes = fromHex(policyObjectId);
+
   const date = new Date();
-  const dateString = `${date.getFullYear()}-${
-    date.getMonth() + 1
-  }-${date.getDate()}`;
+  const dateString = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
   const encoder = new TextEncoder();
   // Combine employee address and date string for a unique daily ID
   // Using toHEX and fromHEX for consistent byte representation if needed, or just use strings
@@ -38,14 +43,8 @@ function createDailyEmployeeId(employeeAddr: string): string {
   console.log(
     `Generated Seal ID for policy: ${employeeAddr}_${dateString}_daily_access`
   );
-  return toHEX(idData);
+  return toHex(new Uint8Array([...policyObjectBytes, ...idData]));
 }
-// export interface KeyServerConfig {
-//   objectId: string;
-//   weight: number;
-//   apiKeyName?: string;
-//   apiKey?: string;
-// }
 async function runEmployeeCheckInCheckOutFlow() {
   const suiClient = new SuiClient({ url: SUI_NODE_URL });
   const sealClient = new SealClient({
@@ -76,7 +75,7 @@ async function runEmployeeCheckInCheckOutFlow() {
     sessionKey = new SessionKey({
       address: employeeAddress,
       packageId: PACKAGE_ID, // Package ID where seal_approve_daily_access is
-      ttlMin: 24 * 60, // 1 day
+      ttlMin: 30, // 1 day
       suiClient: suiClient,
     });
     const personalMessage = sessionKey.getPersonalMessage();
@@ -90,7 +89,10 @@ async function runEmployeeCheckInCheckOutFlow() {
     sessionKey.setPersonalMessageSignature(signedPersonalMessage);
     console.log("SessionKey initialized and signed.");
 
-    const employeePolicyId = createDailyEmployeeId(employeeAddress); // Unique ID for the policy
+    const employeePolicyId = createDailyEmployeeId(
+      employeeAddress,
+      whitelistObjectId
+    ); // Unique ID for the policy
     const dataToEncrypt = new Uint8Array([1]); // Dummy data representing "access granted"
 
     const { encryptedObject } = await sealClient.encrypt({
@@ -112,26 +114,6 @@ async function runEmployeeCheckInCheckOutFlow() {
     if (!dailyAccessCiphertext)
       throw new Error("Daily access ciphertext not available.");
     if (!sessionKey) throw new Error("SessionKey not initialized.");
-    if (!whitelistObjectId)
-      throw new Error("Whitelist ID not available for check-in.");
-
-    // Get the key request object id
-    const txbRequestCheckIn = new Transaction();
-    txbRequestCheckIn.moveCall({
-      target: `${PACKAGE_ID}::employee_log::request_check_in`,
-      arguments: [
-        txbRequestCheckIn.object(whitelistObjectId),
-        txbRequestCheckIn.object("0x6"),
-      ],
-    });
-    const result = await suiClient.signAndExecuteTransaction({
-      transaction: txbRequestCheckIn,
-      signer: employeeKeypair,
-      options: { showEffects: true, showEvents: true },
-    });
-    const krInId = result.effects!.created![0].reference.objectId;
-
-    console.log("krInId", krInId);
 
     // 3a. Seal Approval for Check-In
     const txbSealApproveCheckIn = new Transaction();
@@ -140,15 +122,20 @@ async function runEmployeeCheckInCheckOutFlow() {
     txbSealApproveCheckIn.moveCall({
       target: sealApproveTarget,
       arguments: [
+        txbSealApproveCheckIn.pure.vector("u8", fromHex(employeePolicyId)),
         txbSealApproveCheckIn.object(whitelistObjectId),
-        txbSealApproveCheckIn.object(krInId),
-        txbSealApproveCheckIn.object(CLOCK_OBJECT_ID),
         // Add other args as defined in your seal_approve_daily_access
       ],
     });
     const sealApproveTxBytes = await txbSealApproveCheckIn.build({
       client: suiClient,
       onlyTransactionKind: true,
+    });
+    await sealClient.fetchKeys({
+      ids: [employeePolicyId],
+      txBytes: sealApproveTxBytes,
+      sessionKey,
+      threshold: 1,
     });
 
     console.log(
@@ -166,21 +153,10 @@ async function runEmployeeCheckInCheckOutFlow() {
       // 3b. Actual Check-In Transaction
       const txbCheckIn = new Transaction();
       const requestTarget =
-        `${PACKAGE_ID}::${MODULE_EMPLOYEE_LOG}::request_check_in` as `${string}::${string}::${string}`;
-      const [keyProofObj] = txbCheckIn.moveCall({
-        target: requestTarget,
-        arguments: [
-          txbCheckIn.object(whitelistObjectId),
-          txbCheckIn.object(CLOCK_OBJECT_ID),
-        ],
-      });
-
-      const checkInTarget =
         `${PACKAGE_ID}::${MODULE_EMPLOYEE_LOG}::check_in` as `${string}::${string}::${string}`;
       txbCheckIn.moveCall({
-        target: checkInTarget,
+        target: requestTarget,
         arguments: [
-          keyProofObj,
           txbCheckIn.object(whitelistObjectId),
           txbCheckIn.object(CLOCK_OBJECT_ID),
         ],
@@ -214,17 +190,6 @@ async function runEmployeeCheckInCheckOutFlow() {
     } else {
       console.error("Seal daily access DENIED for check-in.");
     }
-
-    // --- STAGE 4: Employee Performs Check-Out (similar to Check-In) ---
-    // For brevity, this stage would mirror Stage 3 but call request_check_out and check_out.
-    // It would re-use the same dailyAccessCiphertext and active sessionKey (if within TTL).
-    // The seal_approve_daily_access would be called again.
-    console.log(
-      "\n--- Stage 4: Employee Performing Check-Out (Conceptual) ---"
-    );
-    console.log(
-      "Check-out would follow a similar pattern to check-in, using Seal for approval."
-    );
   } catch (error) {
     console.error("Error in employee check-in/out flow:", error);
     if (error instanceof Error && "message" in error) {
@@ -243,3 +208,14 @@ async function runEmployeeCheckInCheckOutFlow() {
 }
 
 runEmployeeCheckInCheckOutFlow();
+
+// // --- STAGE 4: Employee Performs Check-Out (similar to Check-In) ---
+//     // For brevity, this stage would mirror Stage 3 but call check_out.
+//     // It would re-use the same dailyAccessCiphertext and active sessionKey (if within TTL).
+//     // The seal_approve_daily_access would be called again.
+//     console.log(
+//       "\n--- Stage 4: Employee Performing Check-Out (Conceptual) ---"
+//     );
+//     console.log(
+//       "Check-out would follow a similar pattern to check-in, using Seal for approval."
+//     );

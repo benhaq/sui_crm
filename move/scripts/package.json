@@ -6,7 +6,9 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "create-whitelist": "ts-node src/createWhitelist.ts"
+    "create-whitelist": "ts-node src/createWhitelist.ts",
+    "checkinout": "ts-node src/runEmployeeCheckInCheckOutFlow.ts",
+    "add-whitelist": "ts-node src/addWhiteList.ts"
   },
   "keywords": [
     "sui",

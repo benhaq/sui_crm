@@ -48,6 +48,21 @@ public struct WhitelistCreated has copy, drop {
     initial_user_count: u64,
 }
 
+// Event struct for check-in
+public struct EmployeeCheckInEvent has copy, drop {
+    employee: address,
+    check_in_time: u64,
+    // You might add a unique request_id or correlation_id generated off-chain if needed
+}
+
+// Event struct for check-out
+public struct EmployeeCheckOutEvent has copy, drop {
+    employee: address, // Or an identifier for the log being checked out against
+    check_in_time: u64, // To help correlate with the check-in
+    check_out_time: u64,
+    duration: u64,
+}
+
 public fun emit_payment_token_initialized(treasury_cap_id: ID, metadata_id: ID, admin_address: address) {
     event::emit(PaymentTokenInitialized {
         treasury_cap_id: treasury_cap_id,
@@ -61,6 +76,22 @@ public fun emit_tokens_minted(treasury_cap_id: ID, amount: u64, recipient: addre
         treasury_cap_id: treasury_cap_id,
         amount: amount,
         recipient: recipient,
+    });
+}
+
+public fun emit_employee_check_in(employee: address, check_in_time: u64) {
+    event::emit(EmployeeCheckInEvent {
+        employee: employee,
+        check_in_time: check_in_time,
+    });
+}
+
+public fun emit_employee_check_out(employee: address, check_in_time: u64, check_out_time: u64, duration: u64) {
+    event::emit(EmployeeCheckOutEvent {
+        employee: employee,
+        check_in_time: check_in_time,
+        check_out_time: check_out_time,
+        duration: duration,
     });
 }
 
