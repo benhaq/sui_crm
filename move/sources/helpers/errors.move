@@ -26,6 +26,9 @@ const ENotWhitelistedForDailyAccess: u64 = 113;
 // Employee Log Logic Errors
 const EInvalidLog: u64 = 201;
 const EWorklogNotFound: u64 = 202;
+const EAlreadyCheckedInToday: u64 = 203;
+const ENoActiveCheckIn: u64 = 204;
+const EMismatchedCheckInTime: u64 = 205;
 
 // --- Getters for Error Codes ---
 public fun invalid_cap(): u64 { EInvalidCap }
@@ -42,6 +45,9 @@ public fun worklog_not_found(): u64 { EWorklogNotFound }
 public fun invalid_amount(): u64 { EInvalidAmount }
 public fun employee_not_eligible(): u64 { EEmployeeNotEligible }
 public fun invalid_log(): u64 { EInvalidLog }
+public fun already_checked_in_today(): u64 { EAlreadyCheckedInToday }
+public fun no_active_check_in(): u64 { ENoActiveCheckIn }
+public fun mismatched_check_in_time(): u64 { EMismatchedCheckInTime }
 
 // Getters for Nautilus Proof Errors
 public fun invalid_proof_data(): u64 { EInvalidProofData }

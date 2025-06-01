@@ -7,7 +7,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "create-whitelist": "ts-node src/createWhitelist.ts",
-    "checkinout": "ts-node src/runEmployeeCheckInCheckOutFlow.ts",
+    "checkin": "ts-node src/runEmployeeCheckInFlow.ts",
+    "checkout": "ts-node src/runEmployeeCheckOutFlow.ts",
     "add-whitelist": "ts-node src/addWhiteList.ts"
   },
   "keywords": [

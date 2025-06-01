@@ -3,7 +3,7 @@ import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { SealClient, SessionKey, getAllowlistedKeyServers } from "@mysten/seal"; // Ensure @mysten/seal is installed
 import { fromHex, fromHEX, toHex, toHEX } from "@mysten/bcs"; // For handling hex strings if needed for IDs
-import { packageId, whitelistId } from "./constant";
+import { packageId, whitelistId, lastCheckInLogId } from "./constant";
 import { getKeypairFromBech32Priv } from "./helpers";
 
 // Replace with your employee's keypair (ensure it has SUI for gas)
@@ -45,7 +45,7 @@ function createDailyEmployeeId(
   );
   return toHex(new Uint8Array([...policyObjectBytes, ...idData]));
 }
-async function runEmployeeCheckInCheckOutFlow() {
+async function runEmployeeCheckInFlow() {
   const suiClient = new SuiClient({ url: SUI_NODE_URL });
   const sealClient = new SealClient({
     suiClient,
@@ -75,7 +75,7 @@ async function runEmployeeCheckInCheckOutFlow() {
     sessionKey = new SessionKey({
       address: employeeAddress,
       packageId: PACKAGE_ID, // Package ID where seal_approve_daily_access is
-      ttlMin: 30, // 1 day
+      ttlMin: 10, // 10 minutes
       suiClient: suiClient,
     });
     const personalMessage = sessionKey.getPersonalMessage();
@@ -157,6 +157,7 @@ async function runEmployeeCheckInCheckOutFlow() {
       txbCheckIn.moveCall({
         target: requestTarget,
         arguments: [
+          txbCheckIn.object(lastCheckInLogId),
           txbCheckIn.object(whitelistObjectId),
           txbCheckIn.object(CLOCK_OBJECT_ID),
         ],
@@ -173,20 +174,88 @@ async function runEmployeeCheckInCheckOutFlow() {
         },
       });
       console.log("Check-In Transaction Digest:", checkInResult.digest);
-      // Parse checkInResult for created EmployeeLog object, etc.
-      const employeeLogChange = checkInResult.objectChanges?.find(
-        (change) =>
-          change.type === "created" &&
-          change.objectType.startsWith(
-            `${PACKAGE_ID}::${MODULE_EMPLOYEE_LOG}::EmployeeLog`
-          )
+
+      // --- Read Last Check-In Info ---
+      console.log(
+        `\nFetching EmployeeLastCheckInLog object (ID: ${lastCheckInLogId})...`
       );
-      if (employeeLogChange && "objectId" in employeeLogChange) {
-        console.log(
-          "EmployeeLog created/updated with ID:",
-          employeeLogChange.objectId
+      const employeeLogObject = await suiClient.getObject({
+        id: lastCheckInLogId,
+        options: { showContent: true, showType: true },
+      });
+
+      if (
+        employeeLogObject.data &&
+        employeeLogObject.data.content &&
+        employeeLogObject.data.content.dataType === "moveObject"
+      ) {
+        const fields = employeeLogObject.data.content.fields as any;
+        // The Table object itself has an ID, nested within the EmployeeLastCheckInLog object's fields.
+        // The exact path might vary slightly based on Sui SDK version and object structure.
+        // common path is outer_struct.fields.table_field_name.fields.id.id
+        const lastCheckInsTableId = fields.last_check_ins?.fields?.id?.id;
+
+        if (lastCheckInsTableId) {
+          console.log(
+            `Extracted last_check_ins Table ID: ${lastCheckInsTableId}`
+          );
+          console.log(`Querying table for employee: ${employeeAddress}`);
+          try {
+            const checkInRecordField = await suiClient.getDynamicFieldObject({
+              parentId: lastCheckInsTableId,
+              name: {
+                type: "address", // Assuming key type for Table<address, u64> is 'address'
+                value: employeeAddress,
+              },
+            });
+
+            if (
+              checkInRecordField.data &&
+              checkInRecordField.data.content &&
+              checkInRecordField.data.content.dataType === "moveObject"
+            ) {
+              const recordFields = checkInRecordField.data.content
+                .fields as any;
+              // The value (timestamp) is typically in a field named 'value' for Table entries (DynamicField<K,V> -> struct DF {id, name, value})
+              const lastCheckInTimestamp = recordFields.value;
+              console.log(
+                `SUCCESS: Last check-in timestamp for ${employeeAddress}: ${lastCheckInTimestamp}`
+              );
+              const date = new Date(parseInt(lastCheckInTimestamp)); // Parse string to number for Date constructor
+              console.log(`Formatted as Date: ${date.toLocaleString()}`);
+            } else {
+              console.log(
+                `No check-in record found for ${employeeAddress} in the table, or unexpected object structure.`
+              );
+              if (checkInRecordField.error)
+                console.error(
+                  "Error fetching dynamic field:",
+                  checkInRecordField.error
+                );
+            }
+          } catch (e) {
+            console.error(
+              `Error fetching dynamic field for employee ${employeeAddress} from table ${lastCheckInsTableId}:`,
+              e
+            );
+          }
+        } else {
+          console.error(
+            "Could not find 'last_check_ins' Table ID in EmployeeLastCheckInLog object."
+          );
+          console.log(
+            "EmployeeLogObject fields:",
+            JSON.stringify(fields, null, 2)
+          );
+        }
+      } else {
+        console.error(
+          "Could not fetch or parse EmployeeLastCheckInLog object content."
         );
+        if (employeeLogObject.error)
+          console.error("Error fetching object:", employeeLogObject.error);
       }
+      // --- End Read Last Check-In Info ---
     } else {
       console.error("Seal daily access DENIED for check-in.");
     }
@@ -207,7 +276,7 @@ async function runEmployeeCheckInCheckOutFlow() {
   }
 }
 
-runEmployeeCheckInCheckOutFlow();
+runEmployeeCheckInFlow();
 
 // // --- STAGE 4: Employee Performs Check-Out (similar to Check-In) ---
 //     // For brevity, this stage would mirror Stage 3 but call check_out.

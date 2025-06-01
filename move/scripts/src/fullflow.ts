@@ -88,18 +88,22 @@ async function testEmployeeWorkflow() {
   const krOutId = result6.effects!.created![0].reference.objectId;
 
   // Step 7: Seal approves check-out request
-  const tx7 = new TransactionBlock();
+  const tx7 = new Transaction();
   tx7.moveCall({
     target: `${PACKAGE_ID}::whitelist::seal_approve`,
-    arguments: [tx7.pure(WHITELIST_ID), tx7.object(krOutId), tx7.object("0x6")],
+    arguments: [
+      tx7.object(WHITELIST_ID),
+      tx7.object(krOutId),
+      tx7.object("0x6"),
+    ],
   });
-  await client.signAndExecuteTransactionBlock({
-    transactionBlock: tx7,
+  await client.signAndExecuteTransaction({
+    transaction: tx7,
     signer: keypair,
   });
 
   // Step 8: Employee performs check-out
-  const tx8 = new TransactionBlock();
+  const tx8 = new Transaction();
   tx8.moveCall({
     target: `${PACKAGE_ID}::employee_log::check_out`,
     arguments: [
@@ -109,8 +113,8 @@ async function testEmployeeWorkflow() {
       tx8.object("0x6"),
     ],
   });
-  await client.signAndExecuteTransactionBlock({
-    transactionBlock: tx8,
+  await client.signAndExecuteTransaction({
+    transaction: tx8,
     signer: keypair,
   });
 
